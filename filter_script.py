@@ -25,7 +25,7 @@ def write_fastq(read):
 def filter_reads_by_total_soft_clipping(
     bam_path=None,
     output_bam_path=None,
-    threshold_fraction=0.1,
+    threshold_fraction=0.10,
     write_fastq_flag=False
 ):
     # Read BAM from file or stdin

@@ -13,6 +13,9 @@
             <item index="5" class="java.lang.String" itemvalue="scikit-bio" />
             <item index="6" class="java.lang.String" itemvalue="pafpy" />
             <item index="7" class="java.lang.String" itemvalue="pywfa" />
+          <list size="2">
+            <item index="0" class="java.lang.String" itemvalue="scikit-bio" />
+            <item index="1" class="java.lang.String" itemvalue="kmerhash" />
           </list>
         </value>
       </option>
