@@ -30,7 +30,7 @@ def filter_reads_by_total_soft_clipping(
 ):
     # Read BAM from file or stdin
     if bam_path is None:
-        bam = pysam.AlignmentFile("-", "rb")  # BAM from stdin
+        bam = pysam.AlignmentFile("-", "r", reference=@@)  # BAM from stdin
     else:
         bam = pysam.AlignmentFile(bam_path, "rb")
 
@@ -46,6 +46,8 @@ def filter_reads_by_total_soft_clipping(
 
     count_written = 0
     for qname, segments in read_segments.items():
+
+        # use the flag to find unmapped and primary alignment
         read_length = sum(r.query_length for r in segments if r.query_length)
         if read_length is None:
             continue
@@ -63,6 +65,7 @@ def filter_reads_by_total_soft_clipping(
                 output_bam.write(r)
             count_written += 1
 
+    bam.close()
     output_bam.close()
 
 @app.command()
