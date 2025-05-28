@@ -37,31 +37,33 @@ def filter_reads_by_total_soft_clipping(
     # Prepare output BAM for filtered reads (below threshold)
     output_bam = pysam.AlignmentFile(output_bam_path, "wb", header=bam.header)
 
-    read_segments = defaultdict(list)
+
     for read in bam:
-        if read.is_unmapped:
+        read_segments = list(set[])
+        if read.is_unmapped: #try leaving in unmapped reads
             continue
-        read_segments[read.query_name].append(read)
+        if
+        read_segments[read.qname].append(read_segments)
     bam.close()
 
     count_written = 0
-    for qname, segments in read_segments.items():
+    for alignment in read_segments:
 
         # use the flag to find unmapped and primary alignment
-        read_length = sum(r.query_length for r in segments if r.query_length)
+        read_length = sum(r.query_length for r in alignment if r.query_length)
         if read_length is None:
             continue
 
-        total_soft_clip = sum(soft_clip_length(r) for r in segments)
+        total_soft_clip = sum(soft_clip_length(r) for r in alignment)
 
         if total_soft_clip > threshold_fraction * read_length:
             # Write heavily soft clipped reads to FASTQ if requested
             if write_fastq_flag:
-                for r in segments:
+                for r in alignment:
                     write_fastq(r)
         else:
             # Write below threshold reads to output BAM
-            for r in segments:
+            for r in alignment:
                 output_bam.write(r)
             count_written += 1
 

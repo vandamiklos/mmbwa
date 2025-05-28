@@ -36,11 +36,11 @@ def realign(
     sorted_bam = output / "final.sorted.bam"
 
     # Step 1: Run minimap2, convert to BAM, pipe into filter_script.py
-    mm_cmd = f"minimap2 {mm_args} -t {threads} {ref} {input_fastq} | samtools view -Sb -"  # -bh?
+    mm_cmd = f"minimap2 {mm_args} -t {threads} {ref} {input_fastq} | samtools view -b -"
     filter_cmd = f"python {filter_script} -o {filtered_bam} --threshold {threshold} --write-fastq"
 
     # Step 2: Pipe FASTQ output of filter_script.py into bwa mem, convert to BAM
-    bwa_mem_cmd = f"bwa mem {bwa_args} -t {threads} {ref} - | samtools view -Sb - > {realigned_bam}"
+    bwa_mem_cmd = f"bwa mem {bwa_args} -t {threads} {ref} - | samtools view -b - > {realigned_bam}"
 
     # Combine all commands with pipes
     full_cmd = f"{mm_cmd} | {filter_cmd} | {bwa_mem_cmd}"
