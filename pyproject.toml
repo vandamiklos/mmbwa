@@ -1,12 +1,13 @@
 [project]
 name = "mmbwa"
 version = "0.1.0"
-description = "Realign soft-clipped reads with bwa mem after minimap2"
+description = "Realign filtered soft-clipped reads with bwa-mem after minimap2"
 authors = [
-    { name = "Your Name", email = "your@email.com" }
+    { name = "Vanda Miklos", email = "miklosv@cardiff.ac.uk" }
 ]
 dependencies = [
     "typer[all]",
+    "pysam"
 ]
 
 [project.scripts]

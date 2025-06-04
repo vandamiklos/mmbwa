@@ -1,6 +1,7 @@
 Metadata-Version: 2.4
 Name: mmbwa
 Version: 0.1.0
-Summary: Realign soft-clipped reads with bwa mem after minimap2
-Author-email: Your Name <your@email.com>
+Summary: Realign filtered soft-clipped reads with bwa-mem after minimap2
+Author-email: Vanda Miklos <miklosv@cardiff.ac.uk>
 Requires-Dist: typer[all]
+Requires-Dist: pysam
