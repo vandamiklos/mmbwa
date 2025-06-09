@@ -86,7 +86,7 @@ def main(
     output_temp: str = typer.Option(None, "--output-temp", help="Temporary BAM file for realignment"),
     threshold: float = typer.Option(
         0.10,
-        help="Soft clipping fraction threshold to filter reads",
+        help="Soft clipping fraction threshold to filter_soft_clip reads",
     ),
     unmapped: bool = typer.Option(
         False,

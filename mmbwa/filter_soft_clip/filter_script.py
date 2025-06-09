@@ -21,7 +21,7 @@ def write_fastq(read):
     sys.stdout.write(f"@{name}\n{seq}\n+\n{qual_str}\n")
     sys.stdout.flush()
 
-def filter_reads_by_total_soft_clipping(
+def filter_alns(
     bam_path=None,
     output_bam_path=None,
     output_temp=None,
@@ -45,21 +45,21 @@ def filter_reads_by_total_soft_clipping(
     if keep_temp:
         temp_bam = pysam.AlignmentFile(output_temp, "wb", header=bam.header)
 
-
     for read in bam:
         if read.is_secondary or read.is_supplementary: # process only primary alignments
             continue
         if read.query_length is None: # edge case
             continue
-        if not unmapped and read.is_unmapped:
+        if not unmapped and read.is_unmapped: # filter unmapped reads if --unmapped
             continue
 
         total_soft_clip = total_soft_clip_length(read)
 
         if total_soft_clip > threshold_fraction * read.query_length:
-            # Write heavily soft clipped reads to stdout or to temp bam file
+            # write heavily soft clipped reads to stdout or to temp bam file
             if keep_temp:
                 temp_bam.write(read)
+                write_fastq(read)
             else:
                 write_fastq(read)
         else:
@@ -86,7 +86,7 @@ def main(
     output_temp: str = typer.Option(None, "--output-temp", help="Temporary BAM file for realignment"),
     threshold: float = typer.Option(
         0.10,
-        help="Soft clipping fraction threshold to filter reads",
+        help="Soft clipping fraction threshold to filter_soft_clip reads",
     ),
     unmapped: bool = typer.Option(
         False,
@@ -95,7 +95,7 @@ def main(
             False,
             help="Keep temporary files", ),
 ):
-    filter_reads_by_total_soft_clipping(
+    filter_alns(
         bam_path=input_bam,
         output_bam_path=output_bam,
         output_temp=output_temp,

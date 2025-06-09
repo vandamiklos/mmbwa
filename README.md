@@ -1,11 +1,22 @@
 # mmbwa
 
+A command line tool that improves alignment accuracy of highly fragmented variants while minimizing runtime 
+using minimap2 and bwa-mem.
+
+## Table of contents
+* [Overview](#overview)
+* [Install](#install)
+* [Quick usage](#quick-usage)
+* [Requirements](#requirements)
+* [Detailed usage](#detailed-usage)
+* [Options](#options)
+* [Benchmark](#benchmark)
+
 ## Overview
-Improves alignment accuracy of highly fragmented variants while minimizing runtime 
-using minimap2 and bwa-mem. 
+### Start from FASTQ files
 Reads are first aligned with minimap2, the output is piped into a filter script that selects 
-reads with long soft-clips and directs them to bwa-mem. 
-The minimap2 and bwa-mem alignments are merged at the end.
+reads with long soft-clips and directs them to bwa-mem.
+### Start from minimap2 alignment BAM/SAM file
 Optionally minimap2 alignment BAM/SAM files can be used as input, in this case the filtering and bwa-mem alignment
 steps are run.
 
@@ -13,12 +24,17 @@ steps are run.
 
 ### PIP
 ```bash
-pip install .
+pip install -e .
 ```
 
-### conda
+### Conda
 
 in progress
+
+## Requirements
+Python 3.7+
+
+samtools, pysam, minimap2, bwa-mem
 
 ## Quick usage
 Default settings correspond to Nanopore reads.
@@ -28,14 +44,28 @@ mmbwa ref_genome --input-fq /path/to/file.fq --output /path/to/outdir
 ```
 
 ### Use pre-generated minimap2 alignment (SAM/BAM), filter and realign with bwa-mem
-If a minimap2 alignment file is already available.
 ```bash
 mmbwa ref_genome --input-aln /path/to/file.bam --output /path/to/outdir
 ```
-## Requirements
-Python 3.7+
 
-samtools, pysam, minimap2, bwa-mem
+## Detailed usage
+### Soft-clip threshold
+The `--threshold` flag controls which primary alignments are filtered and sent to re-alignment.
+It is calculated by the fraction of soft-clip length and primary alignment length.
+The higher this fraction is the less likely it is that a read is re-aligned.
+
+### Change minimap2 parameters
+
+### Change bwa-mem parameters
+
+### Re-align unmapped reads
+
+### Keep temporary files
+
+### Sort and index final output
+
+
+
 
 ## Options
 
@@ -62,3 +92,6 @@ mmbwa ref_genome --input-aln /path/to/file.bam --output /path/to/outdir --mm-arg
 * --unmapped: Re-align reads unmapped by minimap2 (not tested yet)
 
 The final BAM output is created by merging reads that were below the soft-clipping threshold with the reads re-aligned by bwa-mem.
+
+
+## Benchmark
