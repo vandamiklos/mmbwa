@@ -37,11 +37,10 @@ def realign(
     mm_sam = output / "minimap2.sam" if keep_temp else None
     log_file = output / "log.txt" if log else None
 
-# if pre-aligned minimap2 SAM/BAM is available: BAM/SAM -> filter_soft_clip | bwa-mem
-    log = None
     if log:
         log = open(log_file, "a")
 
+# if pre-aligned minimap2 SAM/BAM is available: BAM/SAM -> filter_soft_clip | bwa-mem
     if input_aln:
 
         filter_args = [
@@ -177,8 +176,11 @@ def realign(
 
     if log:
         log.close()
+
+
 def main():
     app()
+
 
 if __name__ == "__main__":
     main()

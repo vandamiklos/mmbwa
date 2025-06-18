@@ -4,11 +4,19 @@ import typer
 
 app = typer.Typer()
 
-def total_soft_clip_length(read):
-    cig = read.cigartuples
-    if cig is None:
+
+def soft_clip_length(read):
+    if read.cigartuples is None or len(read.cigartuples) == 0:
         return 0
-    return sum(length for op, length in cig if op == 4)
+
+    softclip = 0
+    if read.cigartuples[0][0] == pysam.CSOFT_CLIP:
+        softclip += read.cigartuples[0][1]
+    if read.cigartuples[-1][0] == pysam.CSOFT_CLIP:
+        softclip += read.cigartuples[-1][1]
+
+    return softclip
+
 
 def write_fastq(read):
     name = read.query_name
@@ -17,7 +25,7 @@ def write_fastq(read):
     if seq is None or qual is None:
         typer.echo(f"Warning: Skipped read {name} due to missing sequence or qualities", err=True)
         return
-    qual_str = "".join(chr(q + 33) for q in qual)
+    qual_str = pysam.array_to_qualitystring(qual)
     sys.stdout.write(f"@{name}\n{seq}\n+\n{qual_str}\n")
     sys.stdout.flush()
 
@@ -34,9 +42,9 @@ def filter_alns(
         bam = pysam.AlignmentFile("-", "r")  # SAM from stdin
     else:
         if bam_path.endswith(".bam"):
-            bam = pysam.AlignmentFile(bam_path, "rb") # read BAM from pre-aligned file
+            bam = pysam.AlignmentFile(bam_path, "rb")  # read BAM from pre-aligned file
         else:
-            bam = pysam.AlignmentFile(bam_path, "r")  #read SAM from pre-aligned file
+            bam = pysam.AlignmentFile(bam_path, "r")  # read SAM from pre-aligned file
 
     # Prepare output BAM for filtered reads (below threshold)
     output_bam = pysam.AlignmentFile(output_bam_path, "wb", header=bam.header)
@@ -53,7 +61,7 @@ def filter_alns(
         if not unmapped and read.is_unmapped: # filter unmapped reads if --unmapped
             continue
 
-        total_soft_clip = total_soft_clip_length(read)
+        total_soft_clip = soft_clip_length(read)
 
         if total_soft_clip > threshold_fraction * read.query_length:
             # write heavily soft clipped reads to stdout or to temp bam file
