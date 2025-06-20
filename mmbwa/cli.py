@@ -25,7 +25,7 @@ def realign(
     bwa_args: str = typer.Option("", "--bwa-args", help="Arguments passed to bwa mem"),
     output: Path = typer.Option(..., "--output", "-o", help="Output directory"),
     keep_temp: bool = typer.Option(False, "--keep-temp", help="Keep temporary files"),
-    threshold: float = typer.Option(0.10, "--threshold", help='Fraction of soft-clip/primary alignment length'),
+    threshold: float = typer.Option(100, "--threshold", help='Length of soft-clips'),
     sort: bool = typer.Option(False, "--sort", help='Sort final bam output'),
     index: bool = typer.Option(False, "--index", help='Generate index file from the sorted final bam output'),
     unmapped: bool = typer.Option(False, "--unmapped", help='Re-align unmapped reads with bwa mem'),

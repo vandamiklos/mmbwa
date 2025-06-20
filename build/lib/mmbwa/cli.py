@@ -6,12 +6,14 @@ from pathlib import Path
 
 app = typer.Typer(help="Realign soft-clipped reads with bwa mem after minimap2.")
 
+
 def run_cmd(command: str):
     typer.echo(f"Running: {command}")
     result = subprocess.run(command, shell=True)
     if result.returncode != 0:
         typer.echo(f"Command failed: {command}", err=True)
         raise typer.Exit(code=result.returncode)
+
 
 @app.command()
 def realign(
@@ -23,11 +25,12 @@ def realign(
     bwa_args: str = typer.Option("", "--bwa-args", help="Arguments passed to bwa mem"),
     output: Path = typer.Option(..., "--output", "-o", help="Output directory"),
     keep_temp: bool = typer.Option(False, "--keep-temp", help="Keep temporary files"),
-    threshold: float = typer.Option(0.10, "--threshold", help='Fraction of soft-clip/primary alignment length'),
+    threshold: float = typer.Option(0.10, "--threshold", help='Length of soft-clips'),
     sort: bool = typer.Option(False, "--sort", help='Sort final bam output'),
     index: bool = typer.Option(False, "--index", help='Generate index file from the sorted final bam output'),
     unmapped: bool = typer.Option(False, "--unmapped", help='Re-align unmapped reads with bwa mem'),
-    log : bool = typer.Option(False, "--log", help='Output log file')
+    log: bool = typer.Option(False, "--log", help='Output log file'),
+    no_merge: bool = typer.Option(False, "--no-merge", help='Leave minimap2 and bwa-mem alignment files separately')
 ):
     output.mkdir(parents=True, exist_ok=True)
     realigned_bam = output / "realigned.bam"
@@ -37,11 +40,10 @@ def realign(
     mm_sam = output / "minimap2.sam" if keep_temp else None
     log_file = output / "log.txt" if log else None
 
-# if pre-aligned minimap2 SAM/BAM is available: BAM/SAM -> filter_soft_clip | bwa-mem
-    log = None
     if log:
         log = open(log_file, "a")
 
+# if pre-aligned minimap2 SAM/BAM is available: BAM/SAM -> filter_soft_clip | bwa-mem
     if input_aln:
 
         filter_args = [
@@ -62,14 +64,14 @@ def realign(
         samtools_args = ["samtools", "view", "-b", "-o", str(realigned_bam)]
 
         filter_proc = subprocess.Popen(filter_args, stdout=subprocess.PIPE, stderr=log, text=True)
-        bwa_proc = subprocess.Popen(bwa_args_list, stdin=filter_proc.stdout, stdout=subprocess.PIPE, stderr=log, text=True)
+        bwa_proc = subprocess.Popen(bwa_args_list, stdin=filter_proc.stdout, stdout=subprocess.PIPE, stderr=log,
+                                    text=True)
 
-        # close filter_proc.stdout so it gets a SIGPIPE if bwa_proc exits early
+        # close filter_proc.stdout, so it gets a SIGPIPE if bwa_proc exits early
         filter_proc.stdout.close()
 
         with open(realigned_bam, "wb") as bam_out:
             subprocess.run(samtools_args, stdin=bwa_proc.stdout, stdout=bam_out, stderr=log, check=True)
-
 
     # FASTQ -> minimap2 | filter_soft_clip | bwa-mem
     else:
@@ -138,7 +140,8 @@ def realign(
             if unmapped:
                 filter_args.append("--unmapped")
 
-            filter_proc = subprocess.Popen(filter_args, stdin=mm_proc.stdout, stdout=subprocess.PIPE, text=True, stderr=log)
+            filter_proc = subprocess.Popen(filter_args, stdin=mm_proc.stdout, stdout=subprocess.PIPE, text=True,
+                                           stderr=log)
 
             mm_proc.stdout.close()
 
@@ -154,20 +157,21 @@ def realign(
 
             filter_proc.stdout.close()
 
-    final_bam = output / "final.bam"
-    typer.echo(f"Merging {filtered_bam} and {realigned_bam}")
-    run_cmd(f"samtools merge -@ {threads} {final_bam} {filtered_bam} {realigned_bam}")
+    if not no_merge:
+        final_bam = output / "final.bam"
+        typer.echo(f"Merging {filtered_bam} and {realigned_bam}")
+        run_cmd(f"samtools merge -@ {threads} {final_bam} {filtered_bam} {realigned_bam}")
 
-    # Optional sort/index
-    if sort:
-        typer.echo(f"Sorting {final_bam}")
-        run_cmd(f"samtools sort -@ {threads} -o {sorted_bam} {final_bam}")
-        final_bam = sorted_bam
-    if index:
-        typer.echo(f"Indexing {final_bam}")
-        run_cmd(f"samtools index {final_bam}")
+        # Optional sort/index
+        if sort:
+            typer.echo(f"Sorting {final_bam}")
+            run_cmd(f"samtools sort -@ {threads} -o {sorted_bam} {final_bam}")
+            final_bam = sorted_bam
+        if index:
+            typer.echo(f"Indexing {final_bam}")
+            run_cmd(f"samtools index {final_bam}")
 
-    typer.echo(f"Output BAM: {final_bam}")
+        typer.echo(f"Output BAM: {final_bam}")
 
     if not keep_temp:
         for f in [realigned_bam, filtered_bam, softclipped_bam, mm_sam]:
@@ -177,8 +181,11 @@ def realign(
 
     if log:
         log.close()
+
+
 def main():
     app()
+
 
 if __name__ == "__main__":
     main()
