@@ -8,13 +8,11 @@ app = typer.Typer()
 def soft_clip_length(read):
     if read.cigartuples is None or len(read.cigartuples) == 0:
         return 0
-
     softclip = 0
     if read.cigartuples[0][0] == pysam.CSOFT_CLIP:
         softclip += read.cigartuples[0][1]
     if read.cigartuples[-1][0] == pysam.CSOFT_CLIP:
         softclip += read.cigartuples[-1][1]
-
     return softclip
 
 
@@ -27,7 +25,7 @@ def write_fastq(read):
         return
     qual_str = pysam.array_to_qualitystring(qual)
     sys.stdout.write(f"@{name}\n{seq}\n+\n{qual_str}\n")
-    sys.stdout.flush()
+
 
 def filter_alns(
     bam_path=None,
@@ -54,13 +52,12 @@ def filter_alns(
         temp_bam = pysam.AlignmentFile(output_temp, "wb", header=bam.header)
 
     for read in bam:
-        if read.is_secondary or read.is_supplementary: # process only primary alignments
+        if read.is_secondary or read.is_supplementary:  # process only primary alignments
             continue
         if read.query_length is None: # edge case
             continue
-        if not unmapped and read.is_unmapped: # filter unmapped reads if --unmapped
+        if not unmapped and read.is_unmapped:  # filter unmapped reads if --unmapped
             continue
-
 
         if soft_clip_length(read) > threshold:
             # write heavily soft clipped reads to stdout or to temp bam file
@@ -78,38 +75,26 @@ def filter_alns(
     bam.close()
     output_bam.close()
 
+
 @app.command()
 def main(
-    input_bam: str = typer.Argument(
-        None,
-        help="Input BAM file path. If omitted, reads BAM from stdin.",
-    ),
-    output_bam: str = typer.Option(
-        ...,
-        "-o",
-        "--output",
-        help="Output BAM file path for reads below soft clipping threshold",
-    ),
+    input_bam: str = typer.Argument(None, help="Input BAM file path. If omitted, reads BAM from stdin.",),
+    output_bam: str = typer.Option(..., "-o", "--output", help="Output BAM file path for reads below soft "
+                                                               "clipping threshold",),
     output_temp: str = typer.Option(None, "--output-temp", help="Temporary BAM file for realignment"),
-    threshold: float = typer.Option(
-        100,
-        help="Soft clipping length threshold to filter_soft_clip reads",
-    ),
-    unmapped: bool = typer.Option(
-        False,
-        help="Align unmapped reads with bwa mem", ),
-    keep_temp: bool = typer.Option(
-            False,
-            help="Keep temporary files", ),
+    threshold: int = typer.Option(100, help="Soft clipping length threshold to filter_soft_clip reads", ),
+    unmapped: bool = typer.Option(False, help="Align unmapped reads with bwa mem", ),
+    keep_temp: bool = typer.Option(False, help="Keep temporary files", ),
 ):
     filter_alns(
         bam_path=input_bam,
         output_bam_path=output_bam,
         output_temp=output_temp,
         threshold=threshold,
-        unmapped = unmapped,
-        keep_temp = keep_temp,
+        unmapped=unmapped,
+        keep_temp=keep_temp,
     )
+
 
 if __name__ == "__main__":
     app()

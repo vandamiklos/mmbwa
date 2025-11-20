@@ -113,7 +113,7 @@ def realign(
 
             # BWA MEM on filtered output
             bwa_proc = subprocess.Popen(
-                ["bwa", "mem"] + bwa_args.strip().split() + ["-t", str(threads), str(ref), "-"],
+                ["bwa", "mem"] + bwa_args.strip().split() + ["-v 3", "-t", str(threads), str(ref), "-"],
                 stdin=filter_proc.stdout,
                 stdout=subprocess.PIPE, text=True, stderr=log)
 

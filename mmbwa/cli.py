@@ -25,12 +25,14 @@ def realign(
     bwa_args: str = typer.Option("", "--bwa-args", help="Arguments passed to bwa mem"),
     output: Path = typer.Option(..., "--output", "-o", help="Output directory"),
     keep_temp: bool = typer.Option(False, "--keep-temp", help="Keep temporary files"),
-    threshold: float = typer.Option(100, "--threshold", help='Length of soft-clips'),
-    sort: bool = typer.Option(False, "--sort", help='Sort final bam output'),
-    index: bool = typer.Option(False, "--index", help='Generate index file from the sorted final bam output'),
+    threshold: float = typer.Option(100, "--threshold", help='Threshold for soft-clip length, above this the read will '
+                                                             'be filtered'),
+    sort: bool = typer.Option(False, "--sort", help='Sort final bam output using samtools sort'),
+    index: bool = typer.Option(False, "--index", help='Generate index file from the sorted final bam output, using '
+                                                      'samtools index'),
     unmapped: bool = typer.Option(False, "--unmapped", help='Re-align unmapped reads with bwa mem'),
     log: bool = typer.Option(False, "--log", help='Output log file'),
-    no_merge: bool = typer.Option(False, "--no-merge", help='Leave minimap2 and bwa-mem alignment files separately')
+    no_merge: bool = typer.Option(False, "--no-merge", help='Leave minimap2 and bwa mem alignment files separately')
 ):
     output.mkdir(parents=True, exist_ok=True)
     realigned_bam = output / "realigned.bam"
@@ -40,12 +42,12 @@ def realign(
     mm_sam = output / "minimap2.sam" if keep_temp else None
     log_file = output / "log.txt" if log else None
 
-    if log:
-        log = open(log_file, "a")
+    log_fh = open(log_file, "a", buffering=1) if log else None
 
-# if pre-aligned minimap2 SAM/BAM is available: BAM/SAM -> filter_soft_clip | bwa-mem
+    bwa_args_list = ["bwa", "mem"] + bwa_args.strip().split() + ["-t", str(threads), str(ref), "-"]
+
+    # if pre-aligned minimap2 SAM/BAM is available: BAM/SAM -> filter_soft_clip | bwa-mem
     if input_aln:
-
         filter_args = [
             "python", "-m", "mmbwa.filter_soft_clip.filter_script",
             str(input_aln),
@@ -54,24 +56,27 @@ def realign(
 
         if keep_temp:
             filter_args += ["--output-temp", str(softclipped_bam), "--keep-temp"]
-        else:
+        if not keep_temp:
             filter_args += ["--output-temp", "/dev/null"]
-
         if unmapped:
             filter_args.append("--unmapped")
 
-        bwa_args_list = ["bwa", "mem"] + bwa_args.strip().split() + ["-t", str(threads), str(ref), "-"]
-        samtools_args = ["samtools", "view", "-b", "-o", str(realigned_bam)]
-
-        filter_proc = subprocess.Popen(filter_args, stdout=subprocess.PIPE, stderr=log, text=True)
-        bwa_proc = subprocess.Popen(bwa_args_list, stdin=filter_proc.stdout, stdout=subprocess.PIPE, stderr=log,
-                                    text=True)
-
+        filter_proc = subprocess.Popen(filter_args, stdout=subprocess.PIPE, stderr=log_fh)
+        bwa_proc = subprocess.Popen(bwa_args_list, stdin=filter_proc.stdout, stdout=subprocess.PIPE,
+                                    stderr=log_fh)
         # close filter_proc.stdout, so it gets a SIGPIPE if bwa_proc exits early
         filter_proc.stdout.close()
 
-        with open(realigned_bam, "wb") as bam_out:
-            subprocess.run(samtools_args, stdin=bwa_proc.stdout, stdout=bam_out, stderr=log, check=True)
+        subprocess.run(["samtools", "view", "-b", "-o", str(realigned_bam)],
+                           stdin=bwa_proc.stdout, stderr=log_fh, check=True)
+
+        # ensure upstream processes are reaped and check exit codes
+        bwa_rc = bwa_proc.wait()
+        filter_rc = filter_proc.wait()
+        if bwa_rc != 0:
+            raise typer.Exit(code=bwa_rc)
+        if filter_rc != 0:
+            raise typer.Exit(code=filter_rc)
 
     # FASTQ -> minimap2 | filter_soft_clip | bwa-mem
     else:
@@ -79,18 +84,14 @@ def realign(
             typer.echo("Error: Either --input-fq or --input-aln must be provided.", err=True)
             raise typer.Exit(code=1)
 
+        minimap2_args_list = ["minimap2"] + mm_args.strip().split() + ["-t", str(threads), str(ref), str(input_fq)]
+
         if keep_temp:
             # run minimap2 and tee its output
-            mm_proc = subprocess.Popen(
-                ["minimap2"] + mm_args.strip().split() + ["-t", str(threads), str(ref), str(input_fq)],
-                stdout=subprocess.PIPE, text=True, stderr=log)
-
+            mm_proc = subprocess.Popen(minimap2_args_list, stdout=subprocess.PIPE, stderr=log_fh)
             # tee minimap2 output to a file and pass to filter
-            mm_tee_proc = subprocess.Popen(
-                ["tee", str(mm_sam)],
-                stdin=mm_proc.stdout,
-                stdout=subprocess.PIPE, text=True, stderr=log)
-
+            mm_tee_proc = subprocess.Popen(["tee", str(mm_sam)], stdin=mm_proc.stdout, stdout=subprocess.PIPE,
+                                           stderr=log_fh)
             mm_proc.stdout.close()
 
             # run filter script and tee its output
@@ -104,31 +105,31 @@ def realign(
             if unmapped:
                 filter_args.append("--unmapped")
 
-            filter_proc = subprocess.Popen(
-                filter_args,
-                stdin=mm_tee_proc.stdout,
-                stdout=subprocess.PIPE, text=True, stderr=log)
-
+            filter_proc = subprocess.Popen(filter_args, stdin=mm_tee_proc.stdout, stdout=subprocess.PIPE, stderr=log_fh)
             mm_tee_proc.stdout.close()
 
             # BWA MEM on filtered output
-            bwa_proc = subprocess.Popen(
-                ["bwa", "mem"] + bwa_args.strip().split() + ["-t", str(threads), str(ref), "-"],
-                stdin=filter_proc.stdout,
-                stdout=subprocess.PIPE, text=True, stderr=log)
-
+            bwa_proc = subprocess.Popen(bwa_args_list, stdin=filter_proc.stdout, stdout=subprocess.PIPE, stderr=log_fh)
             filter_proc.stdout.close()
 
             with open(realigned_bam, "wb") as bam_out:
-                subprocess.run(["samtools", "view", "-b"], stdin=bwa_proc.stdout, stdout=bam_out, text=True, stderr=log)
+                subprocess.run(["samtools", "view", "-b"], stdin=bwa_proc.stdout, stdout=bam_out,
+                               stderr=log_fh)
 
-            bwa_proc.stdout.close()
+            # ensure upstream processes are reaped and check exit codes
+            bwa_rc = bwa_proc.wait()
+            filter_rc = filter_proc.wait()
+            mm_tee_rc = mm_tee_proc.wait()
+            mm_rc = mm_proc.wait()
+            for rc, name in zip([bwa_rc, filter_rc, mm_tee_rc, mm_rc],
+                                ["BWA MEM", "filter", "tee", "minimap2"]):
+                if rc != 0:
+                    raise typer.Exit(code=rc)
+
 
         else:
             # minimap2 subprocess
-            mm_proc = subprocess.Popen(
-                ["minimap2"] + mm_args.strip().split() + ["-t", str(threads), str(ref), str(input_fq)],
-                stdout=subprocess.PIPE, text=True, stderr=log)
+            mm_proc = subprocess.Popen(minimap2_args_list, stdout=subprocess.PIPE, stderr=log_fh)
 
             # filter_soft_clip subprocess
             filter_args = [
@@ -140,22 +141,24 @@ def realign(
             if unmapped:
                 filter_args.append("--unmapped")
 
-            filter_proc = subprocess.Popen(filter_args, stdin=mm_proc.stdout, stdout=subprocess.PIPE, text=True,
-                                           stderr=log)
-
+            filter_proc = subprocess.Popen(filter_args, stdin=mm_proc.stdout, stdout=subprocess.PIPE,
+                                           stderr=log_fh)
             mm_proc.stdout.close()
 
             # bwa mem subprocess
-            bwa_proc = subprocess.Popen(
-                ["bwa", "mem"] + bwa_args.strip().split() + ["-t", str(threads), str(ref), "-"],
-                stdin=filter_proc.stdout,
-                stdout=subprocess.PIPE
-            )
+            bwa_proc = subprocess.Popen(bwa_args_list, stdin=filter_proc.stdout, stdout=subprocess.PIPE)
 
             with open(realigned_bam, "wb") as bam_out:
-                subprocess.run(["samtools", "view", "-b"], stdin=bwa_proc.stdout, stdout=bam_out, text=True, stderr=log)
+                subprocess.run(["samtools", "view", "-b"], stdin=bwa_proc.stdout, stdout=bam_out, stderr=log_fh)
 
-            filter_proc.stdout.close()
+            # ensure upstream processes are reaped and check exit codes
+            bwa_rc = bwa_proc.wait()
+            filter_rc = filter_proc.wait()
+            mm_rc = mm_proc.wait()
+            for rc, name in zip([bwa_rc, filter_rc, mm_rc], ["BWA MEM", "filter", "minimap2"]):
+                if rc != 0:
+                    raise typer.Exit(code=rc)
+
 
     if not no_merge:
         final_bam = output / "final.bam"
@@ -173,14 +176,20 @@ def realign(
 
         typer.echo(f"Output BAM: {final_bam}")
 
+
     if not keep_temp:
-        for f in [realigned_bam, filtered_bam, softclipped_bam, mm_sam]:
+        if not no_merge:
+            if filtered_bam and filtered_bam.exists():
+                filtered_bam.unlink()
+                typer.echo(f"Deleted temporary file: {filtered_bam}")
+        for f in (softclipped_bam, mm_sam):
             if f and f.exists():
                 f.unlink()
                 typer.echo(f"Deleted temporary file: {f}")
 
-    if log:
-        log.close()
+    if log_fh:
+        log_fh.close()
+
 
 
 def main():
