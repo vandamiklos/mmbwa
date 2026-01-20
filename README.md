@@ -34,10 +34,10 @@ in progress
 ## Requirements
 Python 3.7+
 
-samtools, pysam, minimap2, bwa-mem
+samtools, bedtools, pysam, minimap2, bwa-mem
 
 ## Quick usage
-Default settings correspond to Nanopore reads.
+Default settings correspond to Nanopore ONT reads.
 ### Align with minimap2, filter, and re-align with bwa-mem
 ```bash
 mmbwa ref_genome --input-fq /path/to/file.fq --output /path/to/outdir
@@ -57,6 +57,8 @@ The higher this fraction is the less likely it is that a read is re-aligned.
 ### Change minimap2 parameters
 
 ### Change bwa-mem parameters
+
+### Exclude genomic regions
 
 ### Re-align unmapped reads
 
@@ -82,11 +84,17 @@ mmbwa ref_genome --input-aln /path/to/file.bam --output /path/to/outdir --mm-arg
 
 * --bwa_args: Arguments for bwa-mem (default: None)
 * --output: Path to output directory
+* --regions: Option to exclude specified genomic regions from bwa-mem alignment. E.g. mapping in centromeric regions 
+considerably slows down the alignment
+* --regions_bed: BED file with genomic intervals
+* --regions_overlap: Min overlap threshold with regions. If the primary alignment overlaps a region but is below this 
+threshold that primary will not be excluded from bwa-mem alignment
 * --keep_temp: Keep temporary files
   * minimap2.sam: SAM file generated after minimap2 alignment
   * filtered.bam: BAM file containing reads that are below the soft-clip threshold
   * softclipped.bam: BAM file containing reads that are above the soft-clip threshold - these are fed to bwa-mem
-* --threshold: If the fraction of the soft-clip length/read length is above this threshold, the read is re-aligned with bwa-mem, default = 0.1
+* --threshold: If the fraction of the soft-clip length/read length is above this threshold, the read is re-aligned with 
+bwa-mem, default = 0.1
 * --sort: Sort the final output BAM
 * --index: Index the final output BAM
 * --unmapped: Re-align reads unmapped by minimap2 (not tested yet)

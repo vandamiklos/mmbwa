@@ -18,14 +18,18 @@ def run_cmd(command: str):
 @app.command()
 def realign(
     ref: Path = typer.Argument(..., help="Reference genome FASTA file"),
-    input_fq: Path = typer.Option(None, "--input-fq", help="Input FASTQ file"),
-    input_aln: Path = typer.Option(None, "--input-aln", help="Input SAM/BAM file if already aligned by minimap2"),
+    input_fq: Path = typer.Option(None, "--input-fq", help="Input FASTQ file - no prior alignment available"),
+    input_aln: Path = typer.Option(None, "--input-aln", help="Input SAM/BAM file if already aligned by minimap2, "
+                                                             "must be sorted and indexed"),
     threads: int = typer.Option(1, "--threads", "-t", help="Number of threads"),
     mm_args: str = typer.Option("-ax map-ont", "--mm-args", help="Arguments passed to minimap2"),
     bwa_args: str = typer.Option("", "--bwa-args", help="Arguments passed to bwa mem"),
     output: Path = typer.Option(..., "--output", "-o", help="Output directory"),
+    regions_bed: Path = typer.Option(None, "--regions_bed", "-rb", help="Genomic regions to exclude from re-alignment "
+                                                                        "in BED format"),
+    regions_overlap: float = typer.Option(0.7, "--regions_overlap", "-ro", help="Min overlap with regions"),
     keep_temp: bool = typer.Option(False, "--keep-temp", help="Keep temporary files"),
-    threshold: float = typer.Option(100, "--threshold", help='Threshold for soft-clip length, above this the read will '
+    threshold: int = typer.Option(100, "--threshold", help='Threshold for soft-clip length, above this the read will '
                                                              'be filtered'),
     sort: bool = typer.Option(False, "--sort", help='Sort final bam output using samtools sort'),
     index: bool = typer.Option(False, "--index", help='Generate index file from the sorted final bam output, using '
@@ -52,7 +56,8 @@ def realign(
             "python", "-m", "mmbwa.filter_soft_clip.filter_script",
             str(input_aln),
             "--output", str(filtered_bam),
-            "--threshold", str(threshold)]
+            "--threshold", str(threshold),
+            "--regions_bed", str(regions_bed)]
 
         if keep_temp:
             filter_args += ["--output-temp", str(softclipped_bam), "--keep-temp"]
@@ -100,7 +105,8 @@ def realign(
                 "--output", str(filtered_bam),
                 "--output-temp", str(softclipped_bam),
                 "--threshold", str(threshold),
-                "--keep-temp"]
+                "--keep-temp",
+                "--regions_bed", str(regions_bed)]
 
             if unmapped:
                 filter_args.append("--unmapped")
@@ -136,7 +142,8 @@ def realign(
                 "python", "-m", "mmbwa.filter_soft_clip.filter_script", "-",
                 "--output", str(filtered_bam),
                 "--output-temp", "/dev/null",
-                "--threshold", str(threshold)]
+                "--threshold", str(threshold),
+                "--regions_bed", str(regions_bed)]
 
             if unmapped:
                 filter_args.append("--unmapped")
@@ -164,7 +171,6 @@ def realign(
         final_bam = output / "final.bam"
         typer.echo(f"Merging {filtered_bam} and {realigned_bam}")
         run_cmd(f"samtools merge -@ {threads} {final_bam} {filtered_bam} {realigned_bam}")
-
         # Optional sort/index
         if sort:
             typer.echo(f"Sorting {final_bam}")
