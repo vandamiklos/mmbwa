@@ -59,52 +59,12 @@ def realign(
             "--threshold", str(threshold),
             "--regions_bed", str(regions_bed)]
 
-#        if regions:
-#            not_intersect_bam = output / "not_in_regions.bam"
-#            intersect_bam = output / "within_regions.bam"
-#            tmp_primary_bam = output / "tmp_primary.bam"
-#            # save primary alignments that are not in specific regions
-#            cmd = (
-#                f"samtools view -h -b -F 0x900 {input_aln} > {tmp_primary_bam} ;"
-#                f"bedtools intersect -abam {tmp_primary_bam} -b {regions_bed} -v -f {regions_overlap}"
-#                f"| "
-#                f"samtools sort -o {not_intersect_bam} -"
-#            )
-#
-#            subprocess.run(
-#                cmd,
-#                shell=True,
-#                stderr=log_fh,
-#                check=True
-#            )
-#
-#            cmd2 = (
-#                f"bedtools intersect -abam {tmp_primary_bam} -b {regions_bed} -wa -f {regions_overlap} "
-#                f"| "
-#                f"samtools sort -o {intersect_bam} -"
-#            )
-#
-#            subprocess.run(
-#                cmd2,
-#                shell=True,
-#                stderr=log_fh,
-#                check=True
-#            )
-#
-#            # change input file
-#            filter_args = [
-#                "python", "-m", "mmbwa.filter_soft_clip.filter_script",
-#                str(not_intersect_bam),
-#                "--output", str(filtered_bam),
-#                "--threshold", str(threshold)]
-
         if keep_temp:
             filter_args += ["--output-temp", str(softclipped_bam), "--keep-temp"]
         if not keep_temp:
             filter_args += ["--output-temp", "/dev/null"]
         if unmapped:
             filter_args.append("--unmapped")
-
 
         filter_proc = subprocess.Popen(filter_args, stdout=subprocess.PIPE, stderr=log_fh)
         bwa_proc = subprocess.Popen(bwa_args_list, stdin=filter_proc.stdout, stdout=subprocess.PIPE,
