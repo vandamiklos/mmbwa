@@ -36,7 +36,9 @@ def realign(
                                                       'samtools index'),
     unmapped: bool = typer.Option(False, "--unmapped", help='Re-align unmapped reads with bwa mem'),
     log: bool = typer.Option(False, "--log", help='Output log file'),
-    no_merge: bool = typer.Option(False, "--no-merge", help='Leave minimap2 and bwa mem alignment files separately')
+    no_merge: bool = typer.Option(False, "--no-merge", help='Leave minimap2 and bwa mem alignment files separately'),
+    len_filter: int = typer.Option(100_000, help="Don't realign reads that are longer than this threshold "),
+    mapq_filter: int = typer.Option(30, help="Don't realign if above this mapq"),
 ):
     output.mkdir(parents=True, exist_ok=True)
     realigned_bam = output / "realigned.bam"
@@ -57,7 +59,9 @@ def realign(
             str(input_aln),
             "--output", str(filtered_bam),
             "--threshold", str(threshold),
-            "--regions_bed", str(regions_bed)]
+            "--regions_bed", str(regions_bed),
+            "--len_filter", str(len_filter),
+            "--mapq_filter", str(mapq_filter)]
 
         if keep_temp:
             filter_args += ["--output-temp", str(softclipped_bam), "--keep-temp"]
@@ -106,7 +110,10 @@ def realign(
                 "--output-temp", str(softclipped_bam),
                 "--threshold", str(threshold),
                 "--keep-temp",
-                "--regions_bed", str(regions_bed)]
+                "--regions_bed", str(regions_bed),
+                "--len_filter", str(len_filter),
+                "--mapq_filter", str(mapq_filter)
+            ]
 
             if unmapped:
                 filter_args.append("--unmapped")
@@ -143,7 +150,10 @@ def realign(
                 "--output", str(filtered_bam),
                 "--output-temp", "/dev/null",
                 "--threshold", str(threshold),
-                "--regions_bed", str(regions_bed)]
+                "--regions_bed", str(regions_bed),
+                "--len_filter", str(len_filter),
+                "--mapq_filter", str(mapq_filter)
+            ]
 
             if unmapped:
                 filter_args.append("--unmapped")

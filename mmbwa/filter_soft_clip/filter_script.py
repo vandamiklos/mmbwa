@@ -61,7 +61,9 @@ def filter_long_soft_clip(
     threshold=100,
     unmapped=False,
     keep_temp=False,
-    regions_bed=None
+    regions_bed=None,
+    len_filter=None,
+    mapq_filter=None
 ):
     # Read BAM from file or stdin
     if bam_path is None:
@@ -79,19 +81,37 @@ def filter_long_soft_clip(
     if keep_temp:
         temp_bam = pysam.AlignmentFile(output_temp, "wb", header=bam.header)
 
-    bed = pd.read_csv(regions_bed, sep='\t')
-    bed_df = bed.iloc[:, :3]
+    interval_tree = {}
+
+    if regions_bed is not None:
+        bed = pd.read_csv(regions_bed,sep="\t",header=None,comment="#",usecols=[0, 1, 2],)
+        bed.columns = ["chrom", "start", "end"]
+        data = prepare_data_from_bed(
+            bed,["chrom", "start", "end"],)
+    interval_tree = build_interval_trees(data)
 
     for read in bam:
         if read.is_secondary or read.is_supplementary:  # process only primary alignments
             continue
         if read.query_length is None:  # edge case
             continue
-        if not unmapped and read.is_unmapped:  # filter unmapped reads if --unmapped
+        if read.is_unmapped:
+            if unmapped:
+                if keep_temp:
+                    temp_bam.write(read)
+                write_fastq(read)
+            continue
+        if read.query_sequence is None:
+            output_bam.write(read)
+            continue
+        if len(read.query_sequence) > len_filter:
+            output_bam.write(read)
+            continue
+        if read.mapq > mapq_filter:
+            output_bam.write(read)
             continue
 
-        data = prepare_data_from_bed(bed_df, ['chrom', 'start', 'end'])
-        interval_tree = build_interval_trees(data)
+
         overlap_interval = interval_tree[read.reference_name].search_interval(read.reference_start, read.reference_end)
         if overlap_interval:
             output_bam.write(read)
@@ -124,6 +144,8 @@ def main(
     unmapped: bool = typer.Option(False, help="Align unmapped reads with bwa mem", ),
     keep_temp: bool = typer.Option(False, help="Keep temporary files", ),
     regions_bed: str = typer.Option(None, "--regions_bed", "-rb", help="Genomic regions in BED format"),
+    len_filter: int = typer.Option(100_000, help="Don't realign reads that are longer than this threshold "),
+    mapq_filter: int = typer.Option(30, help="Don't realign if above this mapq"),
 ):
     filter_long_soft_clip(
         bam_path=input_bam,
@@ -133,6 +155,8 @@ def main(
         unmapped=unmapped,
         keep_temp=keep_temp,
         regions_bed=regions_bed,
+        len_filter=len_filter,
+        mapq_filter=mapq_filter
     )
 
 
